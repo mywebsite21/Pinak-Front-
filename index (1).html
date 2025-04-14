@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinak Front</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        #canvas-container { position: relative; width: 100%; height: auto; }
+        #canvas { width: 100% !important; height: auto !important; }
+        #frame {
+            position: absolute;
+            pointer-events: none;
+            border: 5px solid #4B5563;
+            border-radius: 8px;
+        }
+        #fontModal { transition: all 0.3s ease; }
+        .font-item:hover, .style-item:hover { background-color: #3B82F6; color: white; }
+        .style-item { padding-left: 1.5rem; font-size: 0.9rem; }
+        #canvas-container canvas {
+            touch-action: pan-y;
+        }
+        #userInfo img { width: 40px; height: 40px; border-radius: 50%; }
+        /* Support Button */
+        #supportBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #25D366;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+        #supportBtn:hover {
+            background-color: #20BD5A;
+        }
+        #supportBtn img {
+            width: 24px;
+            height: 24px;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-4 max-w-4xl">
+        <!-- User Info -->
+        <div id="userInfo" class="hidden flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <img id="userPhoto" src="" alt="User Photo">
+                <span id="userName"></span>
+            </div>
+            <button id="logoutBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm">Logout</button>
+        </div>
+
+        <!-- Login Section -->
+        <div id="loginSection" class="text-center mb-6">
+            <h1 class="text-2xl font-bold mb-4">Pinak Front</h1>
+            <button id="googleSignInBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-sm">Sign in with Google</button>
+        </div>
+
+        <!-- Main App (Hidden until login) -->
+        <div id="mainApp" class="hidden">
+            <h1 class="text-2xl font-bold text-center mb-6">Pinak Front</h1>
+
+            <!-- Image Upload -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2">Upload Image</label>
+                <input type="file" id="imageUpload" accept="image/*" class="w-full p-2 bg-gray-800 border border-gray-700 rounded-lg text-sm">
+            </div>
+
+            <!-- Canvas with Frame -->
+            <div id="canvas-container" class="flex justify-center mb-6 relative">
+                <div id="frame"></div>
+                <canvas id="canvas" class="rounded-lg"></canvas>
+            </div>
+
+            <!-- Text Tools -->
+            <div class="bg-gray-800 p-4 rounded-lg mb-6">
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <input type="text" id="textInput" placeholder="Enter text..." class="flex-1 p-2 bg-gray-700 border border-gray-600 rounded-lg text-sm">
+                    <button id="addText" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Add Text</button>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-4">
+                    <button id="fontBtn" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm">Select Font</button>
+                    <input type="range" id="fontSize" min="10" max="100" value="30" class="w-32">
+                    <input type="color" id="textColor" value="#ffffff" class="w-10 h-10 rounded">
+                    <button id="deleteText" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm hidden">Delete Text</button>
+                </div>
+            </div>
+
+            <!-- Font Modal -->
+            <div id="fontModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-50">
+                <div class="bg-gray-800 p-6 rounded-lg w-full max-w-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold">Select Font</h2>
+                        <button id="closeFontModal" class="text-gray-400 hover:text-white">×</button>
+                    </div>
+                    <div class="text-sm text-gray-400 mb-2">Total Fonts: <span id="totalFonts">0</span></div>
+                    <input type="text" id="fontSearch" placeholder="Search fonts..." class="w-full p-2 mb-4 bg-gray-700 border border-gray-600 rounded-lg text-sm">
+                    <div id="fontList" class="max-h-64 overflow-y-auto"></div>
+                    <button id="loadMoreFonts" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Load More</button>
+                </div>
+            </div>
+
+            <!-- Download Button -->
+            <div class="text-center">
+                <button id="downloadBtn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg text-sm">Download Image</button>
+            </div>
+        </div>
+
+        <!-- Support Button -->
+        <a id="supportBtn" href="https://wa.me/8801775792780?text=Hello,%20I%20need%20support%20for%20Pinak%20Front" target="_blank">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp">
+            Support
+        </a>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBaitF9DqjWBrvBtbmxE22A94QOFAffEjI",
+            authDomain: "pinak-d2b67.firebaseapp.com",
+            projectId: "pinak-d2b67",
+            storageBucket: "pinak-d2b67.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Replace with your Messaging Sender ID
+            appId: "YOUR_APP_ID" // Replace with your App ID
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        // Google Sign-In
+        document.getElementById('googleSignInBtn').addEventListener('click', () => {
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    const user = result.user;
+                    console.log('User signed in:', user);
+                })
+                .catch((error) => {
+                    console.error('Error during sign-in:', error);
+                    alert('Failed to sign in: ' + error.message);
+                });
+        });
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            auth.signOut()
+                .then(() => {
+                    console.log('User signed out');
+                })
+                .catch((error) => {
+                    console.error('Error during sign-out:', error);
+                });
+        });
+
+        // Authentication State Listener
+        auth.onAuthStateChanged((user) => {
+            const loginSection = document.getElementById('loginSection');
+            const mainApp = document.getElementById('mainApp');
+            const userInfo = document.getElementById('userInfo');
+            const userName = document.getElementById('userName');
+            const userPhoto = document.getElementById('userPhoto');
+
+            if (user) {
+                loginSection.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                userInfo.classList.remove('hidden');
+                userName.textContent = user.displayName;
+                userPhoto.src = user.photoURL || 'https://via.placeholder.com/40';
+            } else {
+                loginSection.classList.remove('hidden');
+                mainApp.classList.add('hidden');
+                userInfo.classList.add('hidden');
+            }
+        });
+
+        // Canvas Initialization
+        const canvas = new fabric.Canvas('canvas', {
+            enableRetinaScaling: true,
+            allowTouchScrolling: true
+        });
+        let uploadedImage = null;
+        let fontData = [];
+        let displayedFonts = 0;
+        const fontsPerPage = 50;
+        let originalImageWidth = 0;
+        let originalImageHeight = 0;
+        let displayWidth = 0;
+        let displayHeight = 0;
+
+        canvas.selection = false;
+        canvas.on('mouse:down', function(e) {
+            if (!e.target) {
+                canvas.selection = false;
+            }
+        });
+
+        canvas.on('selection:created', function() {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj && activeObj.type === 'text') {
+                document.getElementById('deleteText').classList.remove('hidden');
+            }
+        });
+        canvas.on('selection:cleared', function() {
+            document.getElementById('deleteText').classList.add('hidden');
+        });
+
+        document.getElementById('deleteText').addEventListener('click', function() {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj && activeObj.type === 'text') {
+                canvas.remove(activeObj);
+                canvas.discardActiveObject();
+                canvas.renderAll();
+                document.getElementById('deleteText').classList.add('hidden');
+            }
+        });
+
+        function setCanvasSize(imgWidth, imgHeight) {
+            const container = document.getElementById('canvas-container');
+            const frame = document.getElementById('frame');
+            const maxWidth = container.offsetWidth;
+            const maxHeight = window.innerHeight * 0.5;
+
+            const aspectRatio = imgWidth / imgHeight;
+            let newWidth = Math.min(maxWidth, imgWidth);
+            let newHeight = newWidth / aspectRatio;
+
+            if (newHeight > maxHeight) {
+                newHeight = maxHeight;
+                newWidth = newHeight * aspectRatio;
+            }
+
+            canvas.setWidth(newWidth);
+            canvas.setHeight(newHeight);
+            canvas.renderAll();
+
+            frame.style.width = `${newWidth}px`;
+            frame.style.height = `${newHeight}px`;
+            frame.style.top = '0';
+            frame.style.left = '0';
+
+            displayWidth = newWidth;
+            displayHeight = newHeight;
+            originalImageWidth = imgWidth;
+            originalImageHeight = imgHeight;
+        }
+
+        document.getElementById('imageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = function() {
+                    uploadedImage = new fabric.Image(img, {
+                        left: 0,
+                        top: 0,
+                        selectable: false
+                    });
+
+                    setCanvasSize(img.width, img.height);
+
+                    const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+                    uploadedImage.scale(scale);
+                    canvas.setBackgroundImage(uploadedImage, canvas.renderAll.bind(canvas));
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('addText').addEventListener('click', function() {
+            const text = document.getElementById('textInput').value;
+            if (text) {
+                const textObj = new fabric.Text(text, {
+                    left: 50,
+                    top: 50,
+                    fontFamily: 'Inter',
+                    fontSize: 30,
+                    fill: document.getElementById('textColor').value,
+                    fontWeight: 'normal',
+                    fontStyle: 'normal',
+                    selectable: true
+                });
+                canvas.add(textObj);
+                canvas.setActiveObject(textObj);
+                canvas.renderAll();
+            }
+        });
+
+        document.getElementById('fontSize').addEventListener('input', function() {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj && activeObj.type === 'text') {
+                activeObj.set('fontSize', parseInt(this.value));
+                canvas.renderAll();
+            }
+        });
+
+        document.getElementById('textColor').addEventListener('input', function() {
+            const activeObj = canvas.getActiveObject();
+            if (activeObj && activeObj.type === 'text') {
+                activeObj.set('fill', this.value);
+                canvas.renderAll();
+            }
+        });
+
+        document.getElementById('fontBtn').addEventListener('click', function() {
+            document.getElementById('fontModal').classList.remove('hidden');
+        });
+        document.getElementById('closeFontModal').addEventListener('click', function() {
+            document.getElementById('fontModal').classList.add('hidden');
+        });
+
+        async function fetchFonts() {
+            const apiKey = 'AIzaSyBkEv8HHQUhU4XXuH40exolwqrvBxWFFz8';
+            const response = await fetch(`https://www.googleapis.com/webfonts/v1/webfonts?key=${apiKey}`);
+            const data = await response.json();
+            fontData = data.items;
+            document.getElementById('totalFonts').textContent = fontData.length;
+            loadFonts();
+        }
+
+        function loadFonts() {
+            const fontList = document.getElementById('fontList');
+            const endIndex = Math.min(displayedFonts + fontsPerPage, fontData.length);
+
+            const fontsToLoad = fontData.slice(displayedFonts, endIndex).map(font => font.family);
+            WebFont.load({
+                google: {
+                    families: fontsToLoad
+                },
+                fontactive: function(familyName) {
+                    const font = fontData.find(item => item.family === familyName);
+                    if (font) {
+                        const fontDiv = document.createElement('div');
+                        fontDiv.className = 'font-item p-2 rounded-lg cursor-pointer';
+                        fontDiv.textContent = "Sample Text";
+                        fontDiv.style.fontFamily = `'${font.family}', sans-serif`;
+
+                        const styleDiv = document.createElement('div');
+                        styleDiv.className = 'hidden';
+                        font.variants.forEach(variant => {
+                            const styleItem = document.createElement('div');
+                            styleItem.className = 'style-item p-2 rounded-lg cursor-pointer';
+                            styleItem.textContent = "Sample Text";
+                            styleItem.style.fontFamily = `'${font.family}', sans-serif`;
+                            styleItem.style.fontWeight = variant.match(/\d+/) ? variant : (variant.includes('bold') ? 'bold' : 'normal');
+                            styleItem.style.fontStyle = variant.includes('italic') ? 'italic' : 'normal';
+                            styleItem.onclick = () => {
+                                const activeObj = canvas.getActiveObject();
+                                if (activeObj && activeObj.type === 'text') {
+                                    activeObj.set({
+                                        fontFamily: font.family,
+                                        fontWeight: variant.match(/\d+/) ? variant : (variant.includes('bold') ? 'bold' : 'normal'),
+                                        fontStyle: variant.includes('italic') ? 'italic' : 'normal'
+                                    });
+                                    canvas.renderAll();
+                                }
+                                document.getElementById('fontModal').classList.add('hidden');
+                            };
+                            styleDiv.appendChild(styleItem);
+                        });
+
+                        fontDiv.onclick = () => {
+                            const isVisible = styleDiv.classList.contains('hidden');
+                            document.querySelectorAll('.font-item + div').forEach(div => div.classList.add('hidden'));
+                            if (isVisible) styleDiv.classList.remove('hidden');
+                        };
+
+                        fontList.appendChild(fontDiv);
+                        fontList.appendChild(styleDiv);
+                    }
+                }
+            });
+
+            displayedFonts = endIndex;
+            if (displayedFonts >= fontData.length) {
+                document.getElementById('loadMoreFonts').style.display = 'none';
+            }
+        }
+
+        document.getElementById('loadMoreFonts').addEventListener('click', loadFonts);
+        fetchFonts();
+
+        document.getElementById('fontSearch').addEventListener('input', function() {
+            const search = this.value.toLowerCase();
+            const fontItems = document.querySelectorAll('.font-item');
+            fontItems.forEach(item => {
+                const fontFamily = item.style.fontFamily.toLowerCase().replace(/['"]/g, '');
+                item.style.display = fontFamily.includes(search) ? 'block' : 'none';
+                const styleDiv = item.nextElementSibling;
+                if (styleDiv) styleDiv.style.display = item.style.display;
+            });
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            if (!uploadedImage) {
+                alert("Please upload an image first!");
+                return;
+            }
+
+            const downloadBtn = document.getElementById('downloadBtn');
+            downloadBtn.textContent = 'Downloading...';
+            downloadBtn.disabled = true;
+
+            setTimeout(() => {
+                const currentWidth = canvas.width;
+                const currentHeight = canvas.height;
+                const currentScaleX = uploadedImage.scaleX;
+                const currentScaleY = uploadedImage.scaleY;
+
+                canvas.setWidth(originalImageWidth);
+                canvas.setHeight(originalImageHeight);
+
+                const scaleX = originalImageWidth / uploadedImage.width;
+                const scaleY = originalImageHeight / uploadedImage.height;
+                uploadedImage.scaleX = scaleX;
+                uploadedImage.scaleY = scaleY;
+
+                canvas.getObjects().forEach(obj => {
+                    if (obj.type === 'text') {
+                        obj.scaleX *= scaleX / currentScaleX;
+                        obj.scaleY *= scaleY / currentScaleY;
+                        obj.left *= scaleX / currentScaleX;
+                        obj.top *= scaleY / currentScaleY;
+                    }
+                });
+
+                canvas.renderAll();
+
+                const dataURL = canvas.toDataURL({
+                    format: 'png',
+                    quality: 1,
+                    multiplier: 1
+                });
+
+                canvas.setWidth(currentWidth);
+                canvas.setHeight(currentHeight);
+                uploadedImage.scaleX = currentScaleX;
+                uploadedImage.scaleY = currentScaleY;
+
+                canvas.getObjects().forEach(obj => {
+                    if (obj.type === 'text') {
+                        obj.scaleX /= scaleX / currentScaleX;
+                        obj.scaleY /= scaleY / currentScaleY;
+                        obj.left /= scaleX / currentScaleX;
+                        obj.top /= scaleY / currentScaleY;
+                    }
+                });
+
+                canvas.renderAll();
+
+                const frame = document.getElementById('frame');
+                frame.style.width = `${currentWidth}px`;
+                frame.style.height = `${currentHeight}px`;
+
+                const link = document.createElement('a');
+                link.href = dataURL;
+                link.download = 'edited-image.png';
+                link.click();
+
+                downloadBtn.textContent = 'Download Image';
+                downloadBtn.disabled = false;
+            }, 0);
+        });
+    </script>
+</body>
+</html>
